@@ -1,23 +1,11 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:movie_list_hive/blocs/movie/movies_bloc.dart';
 import 'package:movie_list_hive/models/movie_model.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  late Box<Movie> moviesBox;
-  @override
-  void initState() {
-    super.initState();
-    moviesBox = Hive.box('favorite_movies');
-    debugPrint('Movies: ${moviesBox.values}');
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,70 +14,90 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Your Favorite Movies'),
         centerTitle: true,
         elevation: 0,
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showModalBottomSheet(movieBox: moviesBox),
-        child: const Icon(Icons.add),
-      ),
-      body: ValueListenableBuilder(
-        valueListenable: moviesBox.listenable(),
-        builder: (context, Box<Movie> box, _) {
-          List<Movie> movies = box.values.toList().cast<Movie>();
-          return ListView.builder(
-            itemCount: movies.length,
-            itemBuilder: (context, index) {
-              Movie movie = movies[index];
-              return ListTile(
-                contentPadding: const EdgeInsets.all(10),
-                leading: Image.network(
-                  movie.imageUrl,
-                  fit: BoxFit.cover,
-                ),
-                title: Text(movie.name),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      onPressed: () {
-                        moviesBox.put(
-                          movie.id,
-                          movie.copyWith(
-                              addedToWatchList: !movie.addedToWatchList),
-                        );
-                      },
-                      icon: Icon(
-                        Icons.watch_later,
-                        color: movie.addedToWatchList
-                            ? Colors.grey
-                            : Theme.of(context).primaryColor,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        _showModalBottomSheet(
-                          movieBox: moviesBox,
-                          movie: movie,
-                        );
-                      },
-                      icon: const Icon(Icons.edit),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        box.delete(movie.id);
-                      },
-                      icon: const Icon(Icons.delete),
-                    ),
-                  ],
-                ),
-              );
+        actions: [
+          IconButton(
+            onPressed: () {
+              context.read<MoviesBloc>().add(DeleteAllMovies());
             },
-          );
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showModalBottomSheet(context: context),
+        label: const Text('Add Movie'),
+        icon: const Icon(Icons.add),
+      ),
+      body: BlocBuilder<MoviesBloc, MoviesState>(
+        builder: (context, state) {
+          if (state is MovieLoading) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+          if (state is MovieLoaded) {
+            return ListView.builder(
+              itemCount: state.movies.length,
+              itemBuilder: (context, index) {
+                Movie movie = state.movies[index];
+                return ListTile(
+                  contentPadding: const EdgeInsets.all(10),
+                  leading: Image.network(
+                    movie.imageUrl,
+                    fit: BoxFit.cover,
+                  ),
+                  title: Text(movie.name),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          context.read<MoviesBloc>().add(
+                                UpdateMovie(
+                                  movie: movie.copyWith(
+                                      addedToWatchList:
+                                          !movie.addedToWatchList),
+                                ),
+                              );
+                        },
+                        icon: Icon(
+                          Icons.watch_later,
+                          color: movie.addedToWatchList
+                              ? Colors.grey
+                              : Theme.of(context).primaryColor,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          _showModalBottomSheet(
+                            movie: movie,
+                            context: context,
+                          );
+                        },
+                        icon: const Icon(Icons.edit),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          context.read<MoviesBloc>().add(
+                                DeleteMovie(movie: state.movies[index]),
+                              );
+                        },
+                        icon: const Icon(Icons.delete),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          } else {
+            return const Text('Something went wrong!');
+          }
         },
       ),
     );
   }
 
-  void _showModalBottomSheet({Movie? movie, required Box movieBox}) {
+  void _showModalBottomSheet({Movie? movie, required BuildContext context}) {
     Random random = Random();
     TextEditingController nameController = TextEditingController();
     TextEditingController imgUrlController = TextEditingController();
@@ -112,7 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
               TextField(
                 controller: nameController,
                 keyboardType: TextInputType.name,
-                decoration: const InputDecoration(labelText: 'Movie'),
+                decoration: const InputDecoration(labelText: 'Movie title'),
               ),
               const SizedBox(height: 6),
               TextField(
@@ -124,13 +132,14 @@ class _HomeScreenState extends State<HomeScreen> {
               ElevatedButton(
                 onPressed: () {
                   if (movie != null) {
-                    moviesBox.put(
-                      movie.id,
-                      movie.copyWith(
-                        name: nameController.text,
-                        imageUrl: imgUrlController.text,
-                      ),
-                    );
+                    context.read<MoviesBloc>().add(
+                          UpdateMovie(
+                            movie: movie.copyWith(
+                              name: nameController.text,
+                              imageUrl: imgUrlController.text,
+                            ),
+                          ),
+                        );
                   } else {
                     Movie movie = Movie(
                       id: '${random.nextInt(10000)}',
@@ -138,8 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       imageUrl: imgUrlController.text,
                       addedToWatchList: false,
                     );
-
-                    movieBox.put(movie.id, movie);
+                    context.read<MoviesBloc>().add(AddMovie(movie: movie));
                   }
 
                   Navigator.pop(context);

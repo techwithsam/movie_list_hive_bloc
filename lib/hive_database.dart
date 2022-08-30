@@ -25,7 +25,7 @@ class HiveDatabase {
     await box.delete(movie.id);
   }
 
-  Future<void> deleteAllMovie(Box box, Movie movie) async {
+  Future<void> deleteAllMovie(Box box) async {
     await box.clear();
   }
 }

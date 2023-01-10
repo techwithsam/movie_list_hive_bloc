@@ -15,9 +15,7 @@ void main() async {
   final hiveDatebase = HiveDatabase();
   await hiveDatebase.openBox();
 
-  runApp(MyApp(
-    hiveDatabase: hiveDatebase,
-  ));
+  runApp(MyApp(hiveDatabase: hiveDatebase));
 }
 
 class MyApp extends StatelessWidget {
